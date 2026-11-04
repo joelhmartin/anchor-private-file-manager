@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Anchor Private File Manager
  * Description: Secure, modern private file manager with folders, role permissions, previews, and logging.
- * Version: 2.16.3
+ * Version: 2.16.4
  * Author: Anchor Corps
  */
 
@@ -22,7 +22,7 @@ require_once plugin_dir_path(__FILE__) . 'includes/class-afm-upload-types.php';
 
 class Anchor_Private_File_Manager {
 
-    const VERSION = '2.16.3';
+    const VERSION = '2.16.4';
     const NONCE_ACTION = 'anchor_fm_nonce';
     const COPY_MAX_NODES = 2000;
     const COPY_MAX_DEPTH = 50;
@@ -3819,9 +3819,11 @@ class Anchor_Private_File_Manager {
         $raw = isset($_POST['items']) ? wp_unslash($_POST['items']) : '';
         $items = json_decode((string) $raw, true);
         if (!is_array($items) || !$items) $this->json_error('No items to copy');
-        if ($target <= 0) $this->json_error('Missing target folder');
+        // 0 is the top level: folders may be copied there (as they may be moved
+        // there); files, links and videos always live inside a folder.
+        if ($target < 0) $this->json_error('Missing target folder');
 
-        if (!$this->get_folder_row($target)) $this->json_error('Target folder not found', 404);
+        if ($target > 0 && !$this->get_folder_row($target)) $this->json_error('Target folder not found', 404);
         if (!$this->can_user_upload_to_folder($user_id, $target)) $this->json_error('Forbidden', 403);
 
         $existing = $this->gather_existing_names($target);
@@ -3836,6 +3838,10 @@ class Anchor_Private_File_Manager {
 
             if ($id <= 0 || !in_array($kind, ['file', 'link', 'video', 'folder'], true)) {
                 $res['message'] = 'Invalid item';
+                $errors++; $results[] = $res; continue;
+            }
+            if ($target === 0 && $kind !== 'folder') {
+                $res['message'] = 'Only folders can go at the top level';
                 $errors++; $results[] = $res; continue;
             }
 
